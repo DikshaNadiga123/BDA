@@ -1,0 +1,129 @@
+echo -e "hello world\nhello spark\nhello scala\nspark is fast\nhello spark spark spark spark" > input.txt
+
+spark-shell
+
+// Read the text file as an RDD
+val rdd = sc.textFile("input.txt")
+
+// Split each line into words
+val words = rdd.flatMap(line => line.split("\\W+"))
+
+// Convert to lowercase, remove empty strings, and map to (word, 1)
+val wordPairs = words
+  .map(_.toLowerCase)
+  .filter(_.nonEmpty)
+  .map(word => (word, 1))
+
+// Reduce by key to count occurrences
+val wordCounts = wordPairs.reduceByKey(_ + _)
+
+// Filter words with count > 4
+val frequentWords = wordCounts.filter { case (_, count) => count > 4 }
+
+// Show the result
+frequentWords.collect().foreach(println)
+
+
+
+
+
+3)
+
+import org.apache.spark.SparkConf
+import org.apache.spark.streaming.{Seconds, StreamingContext}
+import org.apache.spark.streaming.dstream.DStream
+
+object SimpleTextStreaming {
+  def main(args: Array[String]): Unit = {
+    // Create Spark config and streaming context (batch interval 5 seconds)
+    val conf = new SparkConf().setAppName("SimpleTextStreaming").setMaster("local[*]")
+    val ssc = new StreamingContext(conf, Seconds(5))
+
+    // Define a list of stop words
+    val stopWords = Set("a", "an", "the", "is", "are", "and", "or", "of", "to", "in")
+
+    // Connect to socket stream on localhost:9999
+    val lines = ssc.socketTextStream("localhost", 9999)
+
+    // Function to do simple lemmatization (example)
+    def lemmatize(word: String): String = word match {
+      case "running" => "run"
+      case "ran" => "run"
+      case "cars" => "car"
+      case "mice" => "mouse"
+      case other => other
+    }
+
+    // Clean the text stream
+    val cleaned: DStream[String] = lines.flatMap(_.split("\\s+"))    // Split words by whitespace
+      .map(_.toLowerCase.trim)                                       // Lowercase and trim
+      .filter(word => word.nonEmpty && !stopWords.contains(word))   // Remove empty and stop words
+      .map(lemmatize)                                                // Lemmatize words
+      .filter(_.nonEmpty)                                            // Remove empty after lemmatize
+      .map(word => word)                                             // Identity, or further processing
+
+    // Print the cleaned words in each RDD batch
+    cleaned.print()
+
+    // Start the streaming context and await termination
+    ssc.start()
+    ssc.awaitTermination()
+  }
+}
+
+
+
+val rdd = sc.parallelize(1 to 20)
+val evens = rdd.filter(_ % 2 == 0)
+evens.collect().foreach(println)
+
+
+val rdd = sc.parallelize(1 to 5)
+val squares = rdd.map(x => x * x)
+squares.collect().foreach(println)
+
+
+
+val rdd = sc.parallelize(Seq(10, 5, 30, 20))
+val maxVal = rdd.max()
+println(s"Maximum value is: $maxVal")
+
+val lines = sc.parallelize(Seq("Scala is scalable and cool", "Spark makes big data easy"))
+val count = lines.flatMap(_.split(" "))
+  .filter(_.length > 3)
+  .count()
+println(s"Words longer than 3 letters: $count")
+
+
+val rdd = sc.parallelize(Seq(1, 2, 3, 4, 5))
+val sum = rdd.reduce(_ + _)
+println(s"Sum is: $sum")
+
+val lines = sc.textFile("sample.txt")
+val sparkLines = lines.filter(_.toLowerCase.contains("spark"))
+sparkLines.collect().foreach(println)
+
+
+val lines = sc.textFile("sample.txt")
+val lineCounts = lines.map(line => (line, 1)).reduceByKey(_ + _)
+lineCounts.collect().foreach(println)
+
+
+
+// Read the file
+val rdd = sc.textFile("numbers.txt")
+
+// Convert each line to an Int
+val numbers = rdd.map(_.toInt)
+
+// Compute max, min, and average
+val maxVal = numbers.max()
+val minVal = numbers.min()
+val sum = numbers.reduce(_ + _)
+val count = numbers.count()
+val avg = sum.toDouble / count
+
+// Print the results
+println(s"Max: $maxVal")
+println(s"Min: $minVal")
+println(f"Average: $avg%.2f")
