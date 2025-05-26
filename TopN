@@ -1,0 +1,38 @@
+1. Mapper (TopNMapper.py)
+#!/usr/bin/env python3
+import sys
+
+# Read each line and emit as (None, line)
+for line in sys.stdin:
+    line = line.strip()
+    if not line:
+        continue
+    print(f"None\t{line}")
+2. Reducer (TopNReducer.py)
+
+#!/usr/bin/env python3
+import sys
+
+N = 3  # Change this value to your desired Top-N
+
+data = []
+
+for line in sys.stdin:
+    line = line.strip()
+    if not line:
+        continue
+    parts = line.split()
+    if len(parts) != 2:
+        continue
+    try:
+        key = parts[0]
+        value = int(parts[1])
+        data.append((value, key))
+    except ValueError:
+        continue
+
+# Sort in descending order of value
+top_n = sorted(data, reverse=True)[:N]
+
+for value, key in top_n:
+    print(f"{key}\t{value}")
