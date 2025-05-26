@@ -1,0 +1,175 @@
+MeanMaxDriver
+
+package topn;
+
+
+
+import java.io.IOException;
+
+import java.util.HashMap;
+
+import java.util.Map;
+
+import java.util.LinkedHashMap;
+
+import java.util.stream.Collectors;
+
+
+
+import org.apache.hadoop.io.IntWritable;
+
+import org.apache.hadoop.io.Text;
+
+import org.apache.hadoop.mapreduce.Reducer;
+
+
+
+public class TopNReducer extends Reducer<Text, IntWritable, Text, IntWritable> {
+
+    private Map<Text, IntWritable> countMap = new HashMap<>();
+
+
+
+    @Override
+
+    public void reduce(Text key, Iterable<IntWritable> values, Context context)
+
+            throws IOException, InterruptedException {
+
+        int sum = 0;
+
+        for (IntWritable val : values) {
+
+            sum += val.get();
+
+        }
+
+        countMap.put(new Text(key), new IntWritable(sum));
+
+    }
+
+
+
+    @Override
+
+    protected void cleanup(Context context) throws IOException, InterruptedException {
+
+        // Sort the countMap by values in descending order and collect the top 20 entries
+
+        Map<Text, IntWritable> sortedMap = countMap.entrySet()
+
+                .stream()
+
+                .sorted((e1, e2) -> Integer.compare(e2.getValue().get(), e1.getValue().get()))
+
+                .limit(20)
+
+                .collect(Collectors.toMap(
+
+                        Map.Entry::getKey,
+
+                        Map.Entry::getValue,
+
+                        (e1, e2) -> e1,
+
+                        LinkedHashMap::new
+
+                ));
+
+
+
+        // Write the top 20 entries to the context
+
+        for (Map.Entry<Text, IntWritable> entry : sortedMap.entrySet()) {
+
+            context.write(entry.getKey(), entry.getValue());
+
+        }
+
+    }
+
+}
+
+
+
+MeanMaxMapper
+
+package meanmax;
+
+import java.io.IOException;
+import org.apache.hadoop.io.IntWritable;
+import org.apache.hadoop.io.LongWritable;
+import org.apache.hadoop.io.Text;
+import org.apache.hadoop.mapreduce.Mapper;
+
+public class MeanMaxMapper extends Mapper<LongWritable, Text, Text, IntWritable> {
+    public static final int MISSING = 9999;
+
+    public void map(LongWritable key, Text value, Mapper<LongWritable, Text, Text, IntWritable>.Context context) throws IOException, InterruptedException {
+        int temperature;
+        String line = value.toString();
+        String month = line.substring(19, 21);
+
+        if (line.charAt(87) == '+') {
+            temperature = Integer.parseInt(line.substring(88, 92));
+        } else {
+            temperature = Integer.parseInt(line.substring(87, 92));
+        }
+
+        String quality = line.substring(92, 93);
+
+        if (temperature != MISSING && quality.matches("[01459]")) {
+            context.write(new Text(month), new IntWritable(temperature));
+        }
+    }
+}
+
+
+
+MeanMaxReducer
+
+package meanmax;
+
+import java.io.IOException;
+import org.apache.hadoop.io.IntWritable;
+import org.apache.hadoop.io.Text;
+import org.apache.hadoop.mapreduce.Reducer;
+
+public class MeanMaxReducer extends Reducer<Text, IntWritable, Text, IntWritable> {
+
+    @Override
+    public void reduce(Text key, Iterable<IntWritable> values,
+                       Context context) throws IOException, InterruptedException {
+
+        int maxTemp = Integer.MIN_VALUE;
+        int totalTemp = 0;
+        int count = 0;
+        int days = 0;
+
+        for (IntWritable value : values) {
+            int temp = value.get();
+            if (temp > maxTemp) {
+                maxTemp = temp;
+            }
+            count++;
+
+            if (count == 3) {
+                totalTemp += maxTemp;
+                maxTemp = Integer.MIN_VALUE;
+                count = 0;
+                days++;
+            }
+        }
+
+        // Handle any remaining temperatures if they don't make a complete group of 3
+        if (count > 0) {
+            totalTemp += maxTemp;
+            days++;
+        }
+
+        if (days > 0) {
+            int mean = totalTemp / days;
+            context.write(key, new IntWritable(mean));
+        }
+    }
+}
